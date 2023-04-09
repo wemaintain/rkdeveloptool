@@ -45,21 +45,21 @@ void usage()
 	printf("Help:\t\t\t-h or --help\r\n");
 	printf("Version:\t\t-v or --version\r\n");
 	printf("ListDevice:\t\tld\r\n");
-	printf("DownloadBoot:\t\tdb <Loader>\r\n");
-	printf("UpgradeLoader:\t\tul <Loader>\r\n");
-	printf("ReadLBA:\t\trl  <BeginSec> <SectorLen> <File>\r\n");
-	printf("WriteLBA:\t\twl  <BeginSec> <File>\r\n");
-	printf("WriteLBA:\t\twlx  <PartitionName> <File>\r\n");
-	printf("WriteGPT:\t\tgpt <gpt partition table>\r\n");
-	printf("WriteParameter:\t\tprm <parameter>\r\n");
-	printf("PrintPartition:\t\tppt \r\n");
-	printf("EraseFlash:\t\tef \r\n");
-	printf("TestDevice:\t\ttd\r\n");
-	printf("ResetDevice:\t\trd [subcode]\r\n");
-	printf("ReadFlashID:\t\trid\r\n");
-	printf("ReadFlashInfo:\t\trfi\r\n");
-	printf("ReadChipInfo:\t\trci\r\n");
-	printf("ReadCapability:\t\trcb\r\n");
+	printf("DownloadBoot:\t\tdb <UsbPath> <Loader>\r\n");
+	printf("UpgradeLoader:\t\tul <UsbPath> <Loader>\r\n");
+	printf("ReadLBA:\t\trl <UsbPath> <BeginSec> <SectorLen> <File>\r\n");
+	printf("WriteLBA:\t\twl <UsbPath> <BeginSec> <File>\r\n");
+	printf("WriteLBA:\t\twlx <UsbPath> <PartitionName> <File>\r\n");
+	printf("WriteGPT:\t\tgpt <UsbPath> <gpt partition table>\r\n");
+	printf("WriteParameter:\t\tprm <UsbPath> <parameter>\r\n");
+	printf("PrintPartition:\t\tppt <UsbPath> \r\n");
+	printf("EraseFlash:\t\tef <UsbPath>\r\n");
+	printf("TestDevice:\t\ttd <UsbPath>\r\n");
+	printf("ResetDevice:\t\trd <UsbPath> [subcode]\r\n");
+	printf("ReadFlashID:\t\trid <UsbPath>\r\n");
+	printf("ReadFlashInfo:\t\trfi <UsbPath>\r\n");
+	printf("ReadChipInfo:\t\trci <UsbPath>\r\n");
+	printf("ReadCapability:\t\trcb <UsbPath>\r\n");
 	printf("PackBootLoader:\t\tpack\r\n");
 	printf("UnpackBootLoader:\tunpack <boot loader>\r\n");
 	printf("TagSPL:\t\t\ttagspl <tag> <U-Boot SPL>\r\n");
@@ -1490,7 +1490,7 @@ static bool saveEntry(FILE* outFile, char* path, rk_entry_type type,
 static inline uint32_t convertChipType(const char* chip) {
 	char buffer[5];
 	memset(buffer, 0, sizeof(buffer));
-	snprintf(buffer, sizeof(buffer), "%s", chip);
+	memcpy(buffer, chip, 4);
 	return buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3];
 }
 
@@ -3029,6 +3029,7 @@ void list_device(CRKScan *pScan)
 		printf("not found any devices!\r\n");
 		return;
 	}
+	printf("DevNo\tVid\tPid\tUsbPath\tType\r\n");
 	for (i=0;i<cnt;i++)
 	{
 		pScan->GetDevice(desc, i);
@@ -3038,8 +3039,10 @@ void list_device(CRKScan *pScan)
 			strDevType = "Loader";
 		else
 			strDevType = "Unknown";
-		printf("DevNo=%d\tVid=0x%x,Pid=0x%x,LocationID=%x\t%s\r\n",i+1,desc.usVid,
-		       desc.usPid,desc.uiLocationID,strDevType.c_str());
+		printf(
+			"%d\t0x%x\t0x%x\t%d\t%s\r\n",
+			i+1, desc.usVid, desc.usPid, desc.usbPath, strDevType.c_str()
+		);
 	}
 	
 }
@@ -3057,6 +3060,7 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 	u8 master_gpt[34 * SECTOR_SIZE], param_buffer[512 * SECTOR_SIZE];
 	u64 lba, lba_end;
 	u32 part_size, part_offset;
+	UINT usb_path = 0;
 
 	transform(strCmd.begin(), strCmd.end(), strCmd.begin(), (int(*)(int))toupper);
 	s = (char*)strCmd.c_str();
@@ -3099,15 +3103,50 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 		NORMAL_COLOR_ATTR;
 		printf("\r\n");
 		return bSuccess;
-	} else if (cnt > 1) {
+	}
+
+	// Select device via UsbPath
+	if (argc < 3) {
+			ERROR_COLOR_ATTR;
+			printf("Please specify UsbPath after command");
+			NORMAL_COLOR_ATTR;
+			printf("\r\n");
+			return bSuccess;
+	}
+
+	char *pszEnd;
+	usb_path = (UINT)strtoul(argv[2], &pszEnd, 10);
+
+	if (usb_path == 0) {
 		ERROR_COLOR_ATTR;
-		printf("Found too many rockusb devices, please plug devices out!");
+		printf("Please specify UsbPath after command");
 		NORMAL_COLOR_ATTR;
 		printf("\r\n");
 		return bSuccess;
 	}
 
-	bRet = pScan->GetDevice(dev, 0);
+	printf("Searching UsbPath %d\n", usb_path);
+
+	bool found = false;
+	for (i=0; i<cnt; i++)
+	{
+		bRet = pScan->GetDevice(dev, i);
+		
+		if (dev.usbPath == usb_path) {
+			printf("Found rockusb at UsbPath %d\n", usb_path);
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		ERROR_COLOR_ATTR;
+		printf("Device with UsbPath %d not found!", usb_path);
+		NORMAL_COLOR_ATTR;
+		printf("\r\n");
+		return bSuccess;
+	}
+
 	if (!bRet) {
 		ERROR_COLOR_ATTR;
 		printf("Getting information about rockusb device failed!");
@@ -3117,15 +3156,15 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 	}
 
 	if(strcmp(strCmd.c_str(), "RD") == 0) {
-		if ((argc != 2) && (argc != 3))
+		if ((argc != 3) && (argc != 4))
 			printf("Parameter of [RD] command is invalid, please check help!\r\n");
 		else {
-			if (argc == 2)
+			if (argc == 3)
 				bSuccess = reset_device(dev);
 			else {
 				UINT uiSubCode;
 				char *pszEnd;
-				uiSubCode = strtoul(argv[2], &pszEnd, 0);
+				uiSubCode = strtoul(argv[3], &pszEnd, 0);
 				if (*pszEnd)
 					printf("Subcode is invalid, please check!\r\n");
 				else {
@@ -3147,11 +3186,11 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 	} else if (strcmp(strCmd.c_str(), "RCB") == 0) {//Read Capability
 		bSuccess = read_capability(dev);
 	} else if(strcmp(strCmd.c_str(), "DB") == 0) {
-		if (argc > 2) {
+		if (argc == 4) {
 			string strLoader;
-			strLoader = argv[2];
+			strLoader = argv[3];
 			bSuccess = download_boot(dev, (char *)strLoader.c_str());
-		} else if (argc == 2) {
+		} else if (argc == 3) {
 			ret = find_config_item(g_ConfigItemVec, "loader");
 			if (ret == -1)
 				printf("Did not find loader item in config!\r\n");
@@ -3160,47 +3199,47 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 		} else
 			printf("Parameter of [DB] command is invalid, please check help!\r\n");
 	} else if(strcmp(strCmd.c_str(), "GPT") == 0) {
-		if (argc > 2) {
+		if (argc  == 4) {
 			string strParameter;
-			strParameter = argv[2];
+			strParameter = argv[3];
 			bSuccess = write_gpt(dev, (char *)strParameter.c_str());
 		} else
 			printf("Parameter of [GPT] command is invalid, please check help!\r\n");
 	} else if(strcmp(strCmd.c_str(), "PRM") == 0) {
-		if (argc > 2) {
+		if (argc == 4) {
 			string strParameter;
-			strParameter = argv[2];
+			strParameter = argv[3];
 			bSuccess = write_parameter(dev, (char *)strParameter.c_str());
 		} else
 			printf("Parameter of [PRM] command is invalid, please check help!\r\n");
 	} else if(strcmp(strCmd.c_str(), "UL") == 0) {
-		if (argc > 2) {
+		if (argc == 4) {
 			string strLoader;
-			strLoader = argv[2];
+			strLoader = argv[3];
 			bSuccess = upgrade_loader(dev, (char *)strLoader.c_str());
 		} else
 			printf("Parameter of [UL] command is invalid, please check help!\r\n");
 	} else if(strcmp(strCmd.c_str(), "EF") == 0) {
-		if (argc == 2) {
+		if (argc == 3) {
 			bSuccess = erase_flash(dev);
 		} else
 			printf("Parameter of [EF] command is invalid, please check help!\r\n");
 	} else if(strcmp(strCmd.c_str(), "WL") == 0) {
-		if (argc == 4) {
+		if (argc == 5) {
 			UINT uiBegin;
 			char *pszEnd;
-			uiBegin = strtoul(argv[2], &pszEnd, 0);
+			uiBegin = strtoul(argv[3], &pszEnd, 0);
 			if (*pszEnd)
 				printf("Begin is invalid, please check!\r\n");
 			else {
-				if (is_sparse_image(argv[3]))
-						bSuccess = write_sparse_lba(dev, (u32)uiBegin, (u32)-1, argv[3]);
+				if (is_sparse_image(argv[4]))
+						bSuccess = write_sparse_lba(dev, (u32)uiBegin, (u32)-1, argv[4]);
 				else {
 					bSuccess = true;
-					if (is_ubifs_image(argv[3]))
+					if (is_ubifs_image(argv[4]))
 						bSuccess = erase_ubi_block(dev, (u32)uiBegin, (u32)-1);
 					if (bSuccess)
-						bSuccess = write_lba(dev, (u32)uiBegin, argv[3]);
+						bSuccess = write_lba(dev, (u32)uiBegin, argv[4]);
 					else
 						printf("Failure of Erase for writing ubi image!\r\n");
 				}
@@ -3208,16 +3247,16 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 		} else
 			printf("Parameter of [WL] command is invalid, please check help!\r\n");
 	} else if(strcmp(strCmd.c_str(), "WLX") == 0) {
-		if (argc == 4) {
+		if (argc == 5) {
 			bRet = read_gpt(dev, master_gpt);
 			if (bRet) {
-				bRet = get_lba_from_gpt(master_gpt, argv[2], &lba, &lba_end);
+				bRet = get_lba_from_gpt(master_gpt, argv[3], &lba, &lba_end);
 				if (bRet) {
-					if (is_sparse_image(argv[3]))
-						bSuccess = write_sparse_lba(dev, (u32)lba, (u32)(lba_end - lba + 1), argv[3]);
+					if (is_sparse_image(argv[4]))
+						bSuccess = write_sparse_lba(dev, (u32)lba, (u32)(lba_end - lba + 1), argv[4]);
 					else {
 						bSuccess = true;
-						if (is_ubifs_image(argv[3]))
+						if (is_ubifs_image(argv[4]))
 						{
 							if (lba_end == 0xFFFFFFFF)
 								bSuccess = erase_ubi_block(dev, (u32)lba, (u32)lba_end);
@@ -3225,31 +3264,31 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 								bSuccess = erase_ubi_block(dev, (u32)lba, (u32)(lba_end - lba + 1));
 						}
 						if (bSuccess)
-							bSuccess = write_lba(dev, (u32)lba, argv[3]);
+							bSuccess = write_lba(dev, (u32)lba, argv[4]);
 						else
 							printf("Failure of Erase for writing ubi image!\r\n");
 					}
 				} else
-					printf("No found %s partition\r\n", argv[2]);
+					printf("No found %s partition\r\n", argv[3]);
 			} else {
 				bRet = read_param(dev, param_buffer);
 				if (bRet) {
-					bRet = get_lba_from_param(param_buffer+8, argv[2], &part_offset, &part_size);
+					bRet = get_lba_from_param(param_buffer+8, argv[3], &part_offset, &part_size);
 					if (bRet) {
-						if (is_sparse_image(argv[3]))
-							bSuccess = write_sparse_lba(dev, part_offset, part_size, argv[3]);
+						if (is_sparse_image(argv[4]))
+							bSuccess = write_sparse_lba(dev, part_offset, part_size, argv[4]);
 						else {
 
 							bSuccess = true;
-							if (is_ubifs_image(argv[3]))
+							if (is_ubifs_image(argv[4]))
 								bSuccess = erase_ubi_block(dev, part_offset, part_size);
 							if (bSuccess)
-								bSuccess = write_lba(dev, part_offset, argv[3]);
+								bSuccess = write_lba(dev, part_offset, argv[4]);
 							else
 								printf("Failure of Erase for writing ubi image!\r\n");
 						}
 					} else
-						printf("No found %s partition\r\n", argv[2]);
+						printf("No found %s partition\r\n", argv[3]);
 				}
 				else
 					printf("Not found any partition table!\r\n");
@@ -3260,23 +3299,23 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 	} else if (strcmp(strCmd.c_str(), "RL") == 0) {//Read LBA
 		char *pszEnd;
 		UINT uiBegin, uiLen;
-		if (argc != 5)
+		if (argc != 6)
 			printf("Parameter of [RL] command is invalid, please check help!\r\n");
 		else {
-			uiBegin = strtoul(argv[2], &pszEnd, 0);
+			uiBegin = strtoul(argv[3], &pszEnd, 0);
 			if (*pszEnd)
 				printf("Begin is invalid, please check!\r\n");
 			else {
-				uiLen = strtoul(argv[3], &pszEnd, 0);
+				uiLen = strtoul(argv[4], &pszEnd, 0);
 				if (*pszEnd)
 					printf("Len is invalid, please check!\r\n");
 				else {
-					bSuccess = read_lba(dev, uiBegin, uiLen, argv[4]);
+					bSuccess = read_lba(dev, uiBegin, uiLen, argv[5]);
 				}
 			}
 		}
 	} else if(strcmp(strCmd.c_str(), "PPT") == 0) {
-		if (argc == 2) {
+		if (argc == 3) {
 			bSuccess = print_gpt(dev);
 			if (!bSuccess) {
 				bSuccess = print_parameter(dev);

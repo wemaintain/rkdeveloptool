@@ -122,7 +122,8 @@ typedef struct _STRUCT_RKDEVICE_DESC{
 	USHORT usVid;
 	USHORT usPid;
 	USHORT usbcdUsb;
-	UINT     uiLocationID;
+	UINT uiLocationID;
+	UINT usbPath;
 	ENUM_RKUSB_TYPE emUsbType;
 	ENUM_RKDEVICE_TYPE emDeviceType;
 	void   *pUsbHandle;
