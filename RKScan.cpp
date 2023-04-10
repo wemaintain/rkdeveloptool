@@ -226,17 +226,6 @@ int CRKScan::FindConfigSetPos(RKDEVICE_CONFIG_SET &devConfigSet, USHORT vid, USH
 	return pos;
 }
 
-int power(int base, int exp) {
-    if (exp == 0)
-        return 1;
-    else if (exp % 2)
-        return base * power(base, exp - 1);
-    else {
-        int temp = power(base, exp / 2);
-        return temp * temp;
-    }
-}
-
 void CRKScan::EnumerateUsbDevice(RKDEVICE_DESC_SET &list, UINT &uiTotalMatchDevices)
 {
 	STRUCT_RKDEVICE_DESC desc;
@@ -249,7 +238,6 @@ void CRKScan::EnumerateUsbDevice(RKDEVICE_DESC_SET &list, UINT &uiTotalMatchDevi
 
 	uint8_t port_numbers[7];
 	int port_number = 0;
-	UINT usb_path = 0;
 
 	ret = libusb_get_device_list(NULL, &pDevs);
 	if (ret < 0) {
@@ -278,13 +266,13 @@ void CRKScan::EnumerateUsbDevice(RKDEVICE_DESC_SET &list, UINT &uiTotalMatchDevi
 			desc.uiLocationID <<= 8;
 			desc.uiLocationID += libusb_get_port_number(dev);
 
-			// Get linux port path: 1:1.0.2 -> 1102
+			// Get linux port path: 1:1.0.2 -> 0x1102
+			desc.usbPath = 0;
 			port_number = libusb_get_port_numbers(dev, port_numbers, 7);
-			usb_path = 0;
 			for (int j = port_number - 1; j >= 0; j--) {
-				usb_path += port_numbers[j] * power(10, j);
+				desc.usbPath <<= 4;
+				desc.usbPath += port_numbers[j];
 			}
-			desc.usbPath = usb_path;
 
 			libusb_ref_device(dev);
 			uiTotalMatchDevices++;
