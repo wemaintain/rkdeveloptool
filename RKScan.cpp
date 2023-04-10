@@ -230,7 +230,7 @@ void CRKScan::EnumerateUsbDevice(RKDEVICE_DESC_SET &list, UINT &uiTotalMatchDevi
 {
 	STRUCT_RKDEVICE_DESC desc;
 	struct libusb_device_descriptor descriptor;
-	int ret,i,cnt;
+	int ret,i,j,cnt;
 
 	uiTotalMatchDevices = 0;
 	libusb_device **pDevs = NULL;
@@ -263,16 +263,17 @@ void CRKScan::EnumerateUsbDevice(RKDEVICE_DESC_SET &list, UINT &uiTotalMatchDevi
 			desc.usVid = descriptor.idVendor;
 			desc.usPid = descriptor.idProduct;
 			desc.uiLocationID = libusb_get_bus_number(dev);
-			desc.uiLocationID <<= 8;
-			desc.uiLocationID += libusb_get_port_number(dev);
 
 			// Get linux port path: 1:1.0.2 -> 0x1102
-			desc.usbPath = 0;
+			desc.usbPath = desc.uiLocationID;
 			port_number = libusb_get_port_numbers(dev, port_numbers, 7);
-			for (int j = port_number - 1; j >= 0; j--) {
+			for (j = port_number - 1; j >= 0; j--) {
 				desc.usbPath <<= 4;
 				desc.usbPath += port_numbers[j];
 			}
+
+			desc.uiLocationID <<= 8;
+			desc.uiLocationID += libusb_get_port_number(dev);
 
 			libusb_ref_device(dev);
 			uiTotalMatchDevices++;
@@ -556,6 +557,7 @@ bool CRKScan::Wait(STRUCT_RKDEVICE_DESC &device, ENUM_RKUSB_TYPE usbType, USHORT
 			device.usVid = (*iter).usVid;
 			device.usPid = (*iter).usPid;
 			device.uiLocationID = (*iter).uiLocationID;
+			device.usbPath = (*iter).usbPath;
 			device.pUsbHandle= (*iter).pUsbHandle;
 			device.emUsbType = usbType;
 			device.usbcdUsb = (*iter).usbcdUsb;
