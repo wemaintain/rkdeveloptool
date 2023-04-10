@@ -3040,7 +3040,7 @@ void list_device(CRKScan *pScan)
 		else
 			strDevType = "Unknown";
 		printf(
-			"%d\t0x%x\t0x%x\t%d\t%s\r\n",
+			"%d\t0x%x\t0x%x\t%x\t%s\r\n",
 			i+1, desc.usVid, desc.usPid, desc.usbPath, strDevType.c_str()
 		);
 	}
@@ -3115,7 +3115,7 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 	}
 
 	char *pszEnd;
-	usb_path = (UINT)strtoul(argv[2], &pszEnd, 10);
+	usb_path = (UINT)strtoul(argv[2], &pszEnd, 16);
 
 	if (usb_path == 0) {
 		ERROR_COLOR_ATTR;
@@ -3125,7 +3125,7 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 		return bSuccess;
 	}
 
-	printf("Searching UsbPath %d\n", usb_path);
+	printf("Searching UsbPath %x\n", usb_path);
 
 	bool found = false;
 	for (i=0; i<cnt; i++)
@@ -3133,7 +3133,7 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 		bRet = pScan->GetDevice(dev, i);
 		
 		if (dev.usbPath == usb_path) {
-			printf("Found rockusb at UsbPath %d\n", usb_path);
+			printf("Found rockusb at UsbPath %x\n", usb_path);
 			found = true;
 			break;
 		}
@@ -3141,7 +3141,7 @@ bool handle_command(int argc, char* argv[], CRKScan *pScan)
 
 	if (!found) {
 		ERROR_COLOR_ATTR;
-		printf("Device with UsbPath %d not found!", usb_path);
+		printf("Device with UsbPath %x not found!", usb_path);
 		NORMAL_COLOR_ATTR;
 		printf("\r\n");
 		return bSuccess;
